@@ -138,10 +138,10 @@
                                 <h2 class="text-xl font-semibold">Namensliste anpassen</h2>
                             </div>
                         </div>
-                        <p class="text-xs text-slate-400 mb-4 italic">Format: Vorname;Nachname. Korrigiere hier die Namen für den Export.</p>
+                        <p class="text-xs text-slate-400 mb-4 italic">Format: Vorname;Nachname;Klasse. Korrigiere hier die Daten für den Export.</p>
                         <textarea id="user-names-input" 
                                   class="w-full flex-grow bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none placeholder:text-slate-600 min-h-[200px]"
-                                  placeholder="Max;Mustermann&#10;Erika;Musterfrau..."
+                                  placeholder="Max;Mustermann;7b&#10;Erika;Musterfrau;6a..."
                                   oninput="generateUsers(); renderTable();"></textarea>
                     </section>
                 </div>
@@ -277,6 +277,7 @@
         </div>
     </div>
 
+    <!-- Notification Toast -->
     <div id="notification" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 bg-blue-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center z-50">
         <i data-lucide="info" class="w-6 h-6 mr-3"></i>
         <span id="notification-text">Hinweis</span>
@@ -411,11 +412,18 @@
             const keys = Object.keys(data[0]);
             const fNameKey = keys.find(k => k.toLowerCase() === 'vornamen' || k.toLowerCase().includes('vor')) || keys[1];
             const lNameKey = keys.find(k => k.toLowerCase() === 'familienname' || k.toLowerCase().includes('sur') || k.toLowerCase().includes('nach')) || keys[2];
+            const classKey = keys.find(k => k.toLowerCase() === 'klasse' || k.toLowerCase().includes('class')) || '';
             
-            const namesText = data.map(row => `${(row[fNameKey] || "").toString().trim()};${(row[lNameKey] || "").toString().trim()}`).join('\n');
+            const namesText = data.map(row => {
+                const f = (row[fNameKey] || "").toString().trim();
+                const l = (row[lNameKey] || "").toString().trim();
+                const c = classKey ? (row[classKey] || "").toString().trim() : "";
+                return `${f};${l};${c}`;
+            }).join('\n');
+            
             appState.user.textInput = namesText;
             userNamesInput.value = namesText;
-            appState.user.mapping = `Mapping: <b>${fNameKey}</b> & <b>${lNameKey}</b>`;
+            appState.user.mapping = `Mapping: <b>${fNameKey}</b>, <b>${lNameKey}</b>${classKey ? ', <b>'+classKey+'</b>' : ''}`;
         }
 
         function checkForConflicts(data) {
@@ -466,6 +474,15 @@
             closeRenamingModal();
         }
 
+        function generatePassword(length = 10) {
+            const charset = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+            let retVal = "";
+            for (let i = 0, n = charset.length; i < length; ++i) {
+                retVal += charset.charAt(Math.floor(Math.random() * n));
+            }
+            return retVal;
+        }
+
         function generateUsers() {
             appState.user.textInput = userNamesInput.value;
             const lines = appState.user.textInput.split('\n').filter(l => l.trim() !== "");
@@ -476,14 +493,31 @@
                 const parts = line.split(';');
                 const f = (parts[0] || "").trim();
                 const l = (parts[1] || "").trim();
+                const c = (parts[2] || "").trim();
+                
+                // Benutzername ohne Umlaute generieren
                 let u = `${f}.${l}`.toLowerCase()
                     .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
                     .replace(/\s+/g, '').replace(/[^a-z0-9.]/g, '');
+                
                 const originalRow = appState.user.raw[i] || {};
+                
+                // Struktur gemäß Anforderungen
                 return { 
-                    'name': u, 'email': originalRow['email'] || `${u}@company.com`, 'givenName': f, 'surname': l,
-                    'lastLoggedTime': originalRow['lastLoggedTime'] || '', 'activated': 'Ja', 'disablePasswordAuthentication': 'Nein',
-                    'provider': '', 'mfaConfigured': 'Nein', 'createdDate': '', 'modifiedDate': ''
+                    'name': u, 
+                    'email': originalRow['email'] || `${u}@company.com`, 
+                    'givenName': f, 
+                    'surname': l,
+                    'password': generatePassword(),
+                    'disablePasswordAuthentication': 'false',
+                    'phone': '',
+                    'position': '',
+                    'country': '',
+                    'managedAppleId': '',
+                    'locale': 'de_DE',
+                    'memberOfGroups': 'GMS_GOLDBERG Student;GMS_GOLDBERG Appstore',
+                    'teacherOfClasses': '',
+                    'studentOfClasses': c
                 };
             });
             statusInfo.innerText = `${appState.user.processed.length} User generiert.`;
@@ -501,10 +535,18 @@
                     deviceName = `${config.prefix}${(config.start + i).toString().padStart(config.digits, '0')}`;
                 }
                 return { 
-                    'name': deviceName, 'serialNumber': row['serialNumber'] || row['Seriennummer'] || '', 'userName': user, 
-                    'type': row['type'] || 'DEP', 'platform': row['platform'] || 'IOS', 'description': row['description'] || '',
-                    'ownership': row['ownership'] || 'COD', 'status': 'ASSIGNED', 'depAccountName': row['depAccountName'] || '',
-                    'depProfile': row['depProfile'] || '', 'useDefaultDeviceName': 'false', 'Modell': row['Modell'] || 'iPad' 
+                    'name': deviceName, 
+                    'serialNumber': row['serialNumber'] || row['Seriennummer'] || '', 
+                    'userName': user, 
+                    'type': row['type'] || 'DEP', 
+                    'platform': row['platform'] || 'IOS', 
+                    'description': row['description'] || '',
+                    'ownership': row['ownership'] || 'COD', 
+                    'status': 'ASSIGNED', 
+                    'depAccountName': row['depAccountName'] || '',
+                    'depProfile': row['depProfile'] || '', 
+                    'useDefaultDeviceName': 'false', 
+                    'Modell': row['Modell'] || 'iPad' 
                 };
             });
             statusInfo.innerText = `${appState.device.processed.length} Geräte verarbeitet.`;
@@ -543,16 +585,18 @@
             const dataToRender = currentMode === 'user' ? appState.user.processed : appState.device.processed;
             if (!dataToRender || dataToRender.length === 0) { tableHeader.innerHTML = ""; tableBody.innerHTML = ""; return; }
             const keys = Object.keys(dataToRender[0]);
+            
             tableHeader.innerHTML = keys.map(k => `
                 <th class="resizable-th px-4 py-2 uppercase tracking-wider text-[10px] font-bold text-slate-500 bg-slate-950 border-b border-blue-500/50">
                     <span class="truncate block pr-2">${k}</span>
                     <div class="resizer" onmousedown="initResize(event, this.parentElement)"></div>
                 </th>`).join('');
+            
             tableBody.innerHTML = dataToRender.slice(0, 50).map(row => `
                 <tr class="hover:bg-blue-900/10 transition-colors">
                     ${keys.map(k => {
                         let cellClass = "px-4 py-2 truncate text-slate-300";
-                        if (currentMode === 'user' && k === 'name') cellClass += " text-blue-400 font-semibold";
+                        if (currentMode === 'user' && (k === 'name' || k === 'password')) cellClass += " text-blue-400 font-semibold";
                         if (currentMode === 'device' && (k === 'userName' || k === 'name')) {
                              if(userListInput.value.trim() !== "" || appState.device.renamingConfig) cellClass += " text-green-400 font-semibold";
                         }
@@ -604,7 +648,7 @@
                 try {
                     const loaded = JSON.parse(e.target.result);
                     if (loaded.appState) appState = loaded.appState;
-                    setMode(currentMode); // UI Refresh
+                    setMode(currentMode);
                     showNotification("Status geladen.");
                 } catch (err) { showNotification("Fehler: Ungültige Datei."); }
             };
@@ -614,8 +658,32 @@
         function exportData() {
             const dataToExport = currentMode === 'user' ? appState.user.processed : appState.device.processed;
             if (dataToExport.length === 0) return;
-            const ws = XLSX.utils.json_to_sheet(dataToExport);
-            const csv = XLSX.utils.sheet_to_csv(ws, { forceQuotes: true, separator: ',' });
+            
+            let finalData = dataToExport;
+            let delimiter = ','; // Standardmäßig Komma-getrennt
+
+            if (currentMode === 'user') {
+                // Exakte Spaltenreihenfolge für Relution User Import basierend auf Template
+                finalData = dataToExport.map(u => ({
+                    'name': u.name,
+                    'email': u.email,
+                    'givenName': u.givenName,
+                    'surname': u.surname,
+                    'password': u.password,
+                    'disablePasswordAuthentication': u.disablePasswordAuthentication,
+                    'phone': u.phone,
+                    'position': u.position,
+                    'country': u.country,
+                    'managedAppleId': u.managedAppleId,
+                    'locale': u.locale,
+                    'memberOfGroups': u.memberOfGroups,
+                    'teacherOfClasses': u.teacherOfClasses,
+                    'studentOfClasses': u.studentOfClasses
+                }));
+            }
+
+            const ws = XLSX.utils.json_to_sheet(finalData);
+            const csv = XLSX.utils.sheet_to_csv(ws, { forceQuotes: true, FS: delimiter });
             const blob = new Blob(["\ufeff", csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a'); a.href = url;
@@ -635,14 +703,6 @@
             lucide.createIcons();
         }
 
-        function showNotification(t) {
-            const toast = document.getElementById('notification');
-            document.getElementById('notification-text').innerText = t;
-            toast.classList.remove('translate-y-20', 'opacity-0');
-            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
-        }
-
-        // --- INITIALISIERUNG ---
         window.onload = () => {
             setMode('user');
         };
