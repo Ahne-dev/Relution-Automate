@@ -137,6 +137,9 @@
                     <button id="btn-mode-device" onclick="setMode('device')" class="px-3 py-2 rounded-md text-xs font-medium transition-all text-slate-400 hover:text-white btn-icon">
                         <i data-lucide="tablet" class="w-4 h-4 mr-2"></i>Endgeräte
                     </button>
+                    <button id="btn-mode-class" onclick="setMode('class')" class="px-3 py-2 rounded-md text-xs font-medium transition-all text-slate-400 hover:text-white btn-icon">
+                        <i data-lucide="book-open" class="w-4 h-4 mr-2"></i>Klassen Export
+                    </button>
                     <button id="btn-mode-letter" onclick="setMode('letter')" class="px-3 py-2 rounded-md text-xs font-medium transition-all text-slate-400 hover:text-white btn-icon">
                         <i data-lucide="mail" class="w-4 h-4 mr-2"></i>Serienbrief
                     </button>
@@ -350,7 +353,7 @@
 
         function setMode(mode) {
             currentMode = mode;
-            ['btn-mode-user', 'btn-mode-device', 'btn-mode-letter'].forEach(id => {
+            ['btn-mode-user', 'btn-mode-device', 'btn-mode-class', 'btn-mode-letter'].forEach(id => {
                 const btn = document.getElementById(id);
                 btn.classList.remove('bg-blue-600', 'text-white');
                 btn.classList.add('text-slate-400');
@@ -360,7 +363,7 @@
             activeBtn.classList.add('bg-blue-600', 'text-white');
             activeBtn.classList.remove('text-slate-400');
 
-            document.getElementById('setup-container').classList.toggle('hidden', mode === 'letter');
+            document.getElementById('setup-container').classList.toggle('hidden', mode === 'letter' || mode === 'class');
             document.getElementById('preview-section').classList.toggle('hidden', mode === 'letter' || (mode === 'user' && appState.user.processed.length === 0) || (mode === 'device' && appState.device.raw.length === 0));
             document.getElementById('letter-section').classList.toggle('hidden', mode !== 'letter');
             document.getElementById('user-options').classList.toggle('hidden', mode !== 'user');
@@ -371,6 +374,9 @@
                 document.getElementById('section-title').innerText = "SuS-Daten importieren";
             } else if (mode === 'device') {
                 document.getElementById('section-title').innerText = "Endgeräte verwalten";
+            } else if (mode === 'class') {
+                document.getElementById('section-title').innerText = "Klassen Export";
+                document.getElementById('preview-section').classList.remove('hidden');
             } else if (mode === 'letter') {
                 renderLetterPreview();
             }
@@ -404,7 +410,7 @@
                 const wb = XLSX.read(data, { type: 'array' });
                 const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
                 
-                if (currentMode === 'user') {
+                if (currentMode === 'user' || currentMode === 'class') {
                     appState.user.raw = json;
                     
                     if (json.length === 0) return;
@@ -437,7 +443,7 @@
                     
                     document.getElementById('user-names-input').value = appState.user.textInput;
                     generateUsers();
-                    setMode('user');
+                    setMode(currentMode);
                 } else {
                     pendingDeviceData = json;
                     checkForConflicts(json);
@@ -542,12 +548,30 @@
         }
 
         function renderTable() {
-            const data = currentMode === 'user' ? appState.user.processed : appState.device.processed;
+            let data = [];
+            if (currentMode === 'user') {
+                data = appState.user.processed;
+            } else if (currentMode === 'device') {
+                data = appState.device.processed;
+            } else if (currentMode === 'class') {
+                // Generiere Klassen-Vorschau
+                const groups = {};
+                appState.user.processed.forEach(u => {
+                    const c = u.studentOfClasses || 'Unbekannt';
+                    if (!groups[c]) groups[c] = [];
+                    groups[c].push({ name: c, RoleName: `${u.givenName} ${u.surname}`, memberType: 'Student' });
+                });
+                Object.keys(groups).forEach(c => {
+                    data.push({ name: c, RoleName: 'SekK8 081', memberType: 'Teacher' });
+                    data.push(...groups[c]);
+                });
+            }
+
             const head = document.getElementById('table-header'), body = document.getElementById('table-body');
             if(!data || data.length === 0) { head.innerHTML = ""; body.innerHTML = ""; return; }
             const keys = Object.keys(data[0]);
             head.innerHTML = keys.map(k => `<th class="resizable-th px-4 py-2 uppercase font-bold text-slate-500 bg-slate-950 border-b border-blue-500/50"><span class="truncate block pr-2">${k}</span><div class="resizer" onmousedown="initResize(event, this.parentElement)"></div></th>`).join('');
-            body.innerHTML = data.slice(0, 50).map(r => `<tr class="hover:bg-blue-900/10 transition-colors">${keys.map(k => `<td class="px-4 py-2 truncate text-slate-300">${r[k]||'-'}</td>`).join('')}</tr>`).join('');
+            body.innerHTML = data.slice(0, 100).map(r => `<tr class="hover:bg-blue-900/10 transition-colors">${keys.map(k => `<td class="px-4 py-2 truncate text-slate-300">${r[k]||'-'}</td>`).join('')}</tr>`).join('');
         }
 
         function renderLetterPreview() {
@@ -644,26 +668,43 @@
         }
 
         function exportData() {
-            let data = currentMode === 'user' ? appState.user.processed : appState.device.processed;
-            if (data.length === 0) return;
-            let finalData = data;
+            let data = [];
+            let fileName = `Relution_${currentMode}_Export.csv`;
+
             if (currentMode === 'user') {
-                finalData = data.map(u => ({ 
+                data = appState.user.processed.map(u => ({ 
                     name: u.name, email: u.email, givenName: u.givenName, surname: u.surname, password: u.password, 
                     disablePasswordAuthentication: u.disablePasswordAuthentication, phone: '', position: '', country: '', 
                     managedAppleId: '', locale: u.locale, memberOfGroups: u.memberOfGroups, teacherOfClasses: '', studentOfClasses: u.studentOfClasses 
                 }));
-            } else {
-                finalData = data.map(d => ({ 
+            } else if (currentMode === 'device') {
+                data = appState.device.processed.map(d => ({ 
                     serialNumber: d.serialNumber, name: d.name, userEmail: d.userEmail, 
                     depProfile: '', enrollToOrganizationUuid: '', Benutzertyp: '', 'zuordnung Koffer': '' 
                 }));
+            } else if (currentMode === 'class') {
+                // Gruppiere nach Klassen
+                const groups = {};
+                appState.user.processed.forEach(u => {
+                    const c = u.studentOfClasses || 'Unbekannt';
+                    if (!groups[c]) groups[c] = [];
+                    groups[c].push({ name: c, RoleName: `${u.givenName} ${u.surname}`, memberType: 'Student' });
+                });
+                Object.keys(groups).forEach(c => {
+                    // Lehrer Zeile
+                    data.push({ name: c, RoleName: 'SekK8 081', memberType: 'Teacher' });
+                    // Schüler Zeilen
+                    data.push(...groups[c]);
+                });
             }
-            const ws = XLSX.utils.json_to_sheet(finalData);
+
+            if (data.length === 0) return showNotification("Keine Daten zum Exportieren.");
+
+            const ws = XLSX.utils.json_to_sheet(data);
             const csv = XLSX.utils.sheet_to_csv(ws, { forceQuotes: true, FS: ',' });
             const blob = new Blob(["\ufeff", csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = `Relution_${currentMode}_Export.csv`; a.click();
+            const a = document.createElement('a'); a.href = url; a.download = fileName; a.click();
         }
 
         async function saveState(type) {
