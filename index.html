@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relution User & Device Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f1f5f9;
+        }
+        .custom-dropzone {
+            border: 2px dashed #334155;
+            transition: all 0.3s ease;
+        }
+        .custom-dropzone:hover {
+            border-color: #3b82f6;
+            background-color: #1e293b;
+        }
+        .btn-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+        }
+        
+        /* Spalten-Resizing & Tabellen-Design */
+        .resizable-th {
+            position: relative;
+            min-width: 80px;
+            border-right: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        .resizer {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 6px;
+            cursor: col-resize;
+            user-select: none;
+            transition: background-color 0.2s;
+            z-index: 10;
+        }
+        .resizer:hover, .resizer.resizing {
+            background-color: #3b82f6;
+        }
+        
+        table {
+            table-layout: fixed;
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        th, td {
+            border-right: 1px solid rgba(59, 130, 246, 0.2);
+            border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        
+        th:last-child, td:last-child {
+            border-right: none;
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 text-slate-200">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <header class="mb-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-blue-500">Relution Helper</h1>
+                <p class="text-slate-400 mt-1">Automatisierte User- & Geräteverwaltung</p>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row gap-3">
+                <div class="bg-slate-800 p-1 rounded-lg flex items-center shadow-lg border border-slate-700">
+                    <button id="btn-mode-user" onclick="setMode('user')" class="px-4 py-2 rounded-md text-sm font-medium transition-all bg-blue-600 text-white shadow-sm btn-icon">
+                        <i data-lucide="users" class="w-4 h-4 mr-2"></i>User Import
+                    </button>
+                    <button id="btn-mode-device" onclick="setMode('device')" class="px-4 py-2 rounded-md text-sm font-medium transition-all text-slate-400 hover:text-white btn-icon">
+                        <i data-lucide="tablet" class="w-4 h-4 mr-2"></i>Endgeräte
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Step 1: Input -->
+                <div class="lg:col-span-2 space-y-6">
+                    <section class="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                            <div class="flex items-center">
+                                <span class="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold mr-3">1</span>
+                                <h2 id="section-title" class="text-xl font-semibold">Schülerliste hochladen</h2>
+                            </div>
+                            <button onclick="document.getElementById('jsonFileInput').click()" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-md flex items-center transition-colors btn-icon">
+                                <i data-lucide="folder-open" class="w-3.5 h-3.5 mr-2"></i>Status laden (JSON)
+                            </button>
+                            <input type="file" id="jsonFileInput" class="hidden" accept=".json" onchange="loadState(this)">
+                        </div>
+
+                        <p id="section-desc" class="text-sm text-slate-400 mb-6 italic">Lade die Export-Datei (CSV/Excel) mit den SuS-Daten hoch.</p>
+                        
+                        <div id="dropzone" class="custom-dropzone rounded-xl p-12 text-center cursor-pointer mb-2">
+                            <input type="file" id="fileInput" class="hidden" accept=".csv, .xlsx, .xls">
+                            <div class="flex flex-col items-center">
+                                <i data-lucide="upload-cloud" class="w-14 h-14 text-blue-500 mb-4"></i>
+                                <span class="text-lg font-medium text-slate-200">Datei auswählen oder ziehen</span>
+                                <span class="text-xs text-slate-500 mt-2 text-center">Unterstützt .xlsx, .csv (Relution-Exports oder Namenslisten)</span>
+                            </div>
+                        </div>
+                        <div id="mapping-info-box" class="hidden flex items-center gap-2 mt-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                            <i data-lucide="search" class="w-4 h-4 text-blue-400"></i>
+                            <span id="mapping-text" class="text-xs text-slate-400"></span>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Step 2: Customization (User Mode options) -->
+                <div id="user-options" class="hidden space-y-6">
+                    <section class="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl h-full flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center">
+                                <span class="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold mr-3">2</span>
+                                <h2 class="text-xl font-semibold">Namensliste anpassen</h2>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 mb-4 italic">Format: Vorname;Nachname. Korrigiere hier die Namen für den Export.</p>
+                        <textarea id="user-names-input" 
+                                  class="w-full flex-grow bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none placeholder:text-slate-600 min-h-[200px]"
+                                  placeholder="Max;Mustermann&#10;Erika;Musterfrau..."
+                                  oninput="generateUsers(); renderTable();"></textarea>
+                    </section>
+                </div>
+
+                <!-- Step 2: Customization (Device Mode options) -->
+                <div id="device-options" class="hidden space-y-6">
+                    <section class="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl h-full flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center">
+                                <span class="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold mr-3">2</span>
+                                <h2 class="text-xl font-semibold">User-Zuweisung</h2>
+                            </div>
+                            <button onclick="openRenamingModal()" class="text-[10px] bg-slate-700 hover:bg-blue-600 px-2 py-1 rounded transition-colors flex items-center">
+                                <i data-lucide="hash" class="w-3 h-3 mr-1"></i>iPad-Namen verwalten
+                            </button>
+                        </div>
+                        <p class="text-xs text-slate-400 mb-4 italic">Benutzernamen einfügen (einer pro Zeile).</p>
+                        <textarea id="user-list-input" 
+                                  class="w-full flex-grow bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none placeholder:text-slate-600 min-h-[200px]"
+                                  placeholder="vorname.nachname&#10;vorname2.nachname2..."
+                                  oninput="processDeviceAssignment(); renderTable();"></textarea>
+                    </section>
+                </div>
+            </div>
+
+            <!-- Step 3: Preview -->
+            <section id="preview-section" class="hidden bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div class="flex items-center">
+                        <span class="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold mr-3">
+                            <span id="step-preview-number">3</span>
+                        </span>
+                        <h2 class="text-xl font-semibold">Vorschau & Export</h2>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-2">
+                        <button id="link-to-devices-btn" onclick="transferUsernames()" class="hidden bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-4 py-2 rounded-lg flex items-center transition-all shadow-md btn-icon">
+                            <i data-lucide="link" class="w-4 h-4 mr-2"></i>Namen an Geräte übertragen
+                        </button>
+
+                        <button id="save-main-btn" onclick="saveState('save')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded-lg flex items-center transition-all shadow-md btn-icon">
+                            <i data-lucide="save" class="w-4 h-4 mr-2"></i>Status Sichern
+                        </button>
+                        <button onclick="saveState('backup')" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-4 py-2 rounded-lg flex items-center transition-all shadow-md btn-icon">
+                            <i data-lucide="hard-drive" class="w-4 h-4 mr-2"></i>Backup erstellen
+                        </button>
+                        <button onclick="clearAllData()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs px-3 py-2 rounded-lg flex items-center transition-colors btn-icon" title="Alles löschen">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto mb-6 border border-slate-700 rounded-lg bg-slate-900/40 shadow-inner no-scrollbar">
+                    <table id="preview-table" class="text-left text-xs md:text-sm">
+                        <thead class="bg-slate-950 text-slate-300">
+                            <tr id="table-header"></tr>
+                        </thead>
+                        <tbody id="table-body" class="bg-slate-900/50"></tbody>
+                    </table>
+                </div>
+
+                <div class="flex flex-col md:flex-row gap-4 items-center justify-between border-t border-slate-700 pt-6">
+                    <div id="status-info" class="text-sm text-slate-400 italic">Keine Daten verarbeitet.</div>
+                    <button id="export-btn" onclick="exportData()" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-10 rounded-lg flex items-center justify-center transition-all shadow-lg active:scale-95 btn-icon">
+                        <i data-lucide="download" class="w-5 h-5 mr-2"></i>CSV Export (Relution)
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="import-dialog" class="fixed inset-0 z-[60] hidden modal-overlay flex items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <h3 class="text-xl font-bold mb-4 flex items-center text-blue-400">
+                <i data-lucide="alert-circle" class="mr-2"></i> Vorhandene Daten gefunden
+            </h3>
+            <p class="text-sm text-slate-300 mb-6">Die hochgeladene Datei enthält bereits Daten. Wie möchtest du fortfahren?</p>
+            <div class="space-y-3">
+                <div class="p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="check-clear-users" class="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded">
+                        <span class="ml-3 text-sm">Vorhandene Benutzernamen löschen</span>
+                    </label>
+                </div>
+                <div class="p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="check-keep-names" checked class="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded">
+                        <span class="ml-3 text-sm">Vorhandene iPad-Namen behalten</span>
+                    </label>
+                </div>
+            </div>
+            <div class="mt-8 flex gap-3">
+                <button onclick="confirmImportOptions()" class="flex-grow bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold transition-all">Importieren</button>
+                <button onclick="closeImportDialog()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-4 py-2 rounded-lg transition-all">Abbrechen</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="renaming-modal" class="fixed inset-0 z-[60] hidden modal-overlay flex items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <h3 class="text-xl font-bold mb-2 flex items-center text-indigo-400">
+                <i data-lucide="hash" class="mr-2"></i> iPad-Namen neu generieren
+            </h3>
+            <div id="device-count-info" class="bg-indigo-500/10 text-indigo-300 text-[10px] px-2 py-1 rounded mb-4 inline-block border border-indigo-500/20">
+                Erkannte Geräte: 0
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-tight">Präfix</label>
+                    <input type="text" id="renaming-prefix" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm focus:ring-1 focus:ring-indigo-500 outline-none" placeholder="iPad-GMSG-">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-tight">Startnummer</label>
+                        <input type="number" id="renaming-start" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm focus:ring-1 focus:ring-indigo-500 outline-none" value="1">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-tight">Stellen</label>
+                        <select id="renaming-digits" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm focus:ring-1 focus:ring-indigo-500 outline-none">
+                            <option value="1">1 (1, 2, ...)</option>
+                            <option value="2">2 (01, 02, ...)</option>
+                            <option value="3" selected>3 (001, 002, ...)</option>
+                            <option value="4">4 (0001, 0002, ...)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-8 flex gap-3">
+                <button onclick="applyRenaming()" class="flex-grow bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-bold transition-all">Anwenden</button>
+                <button onclick="closeRenamingModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-4 py-2 rounded-lg transition-all">Schließen</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 bg-blue-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center z-50">
+        <i data-lucide="info" class="w-6 h-6 mr-3"></i>
+        <span id="notification-text">Hinweis</span>
+    </div>
+
+    <script>
+        let appState = {
+            user: { raw: [], processed: [], mapping: "", textInput: "" },
+            device: { raw: [], processed: [], textInput: "", renamingConfig: null }
+        };
+        
+        let currentMode = 'user';
+        let currentFileHandle = null;
+        let pendingDeviceData = null;
+
+        window.addEventListener('beforeunload', function (e) {
+            if (appState.user.raw.length > 0 || appState.device.raw.length > 0) {
+                const msg = 'Ungespeicherte Änderungen gehen verloren.';
+                (e || window.event).returnValue = msg; 
+                return msg;
+            }
+        });
+
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const previewSection = document.getElementById('preview-section');
+        const tableHeader = document.getElementById('table-header');
+        const tableBody = document.getElementById('table-body');
+        const statusInfo = document.getElementById('status-info');
+        const userOptions = document.getElementById('user-options');
+        const deviceOptions = document.getElementById('device-options');
+        const userNamesInput = document.getElementById('user-names-input');
+        const userListInput = document.getElementById('user-list-input');
+        const mappingInfoBox = document.getElementById('mapping-info-box');
+        const mappingText = document.getElementById('mapping-text');
+        const stepPreviewNumber = document.getElementById('step-preview-number');
+        const saveMainBtn = document.getElementById('save-main-btn');
+        const linkBtn = document.getElementById('link-to-devices-btn');
+
+        function setMode(mode) {
+            currentMode = mode;
+            const btnUser = document.getElementById('btn-mode-user');
+            const btnDevice = document.getElementById('btn-mode-device');
+            const title = document.getElementById('section-title');
+            const desc = document.getElementById('section-desc');
+
+            if (mode === 'user') {
+                btnUser.className = "px-4 py-2 rounded-md text-sm font-medium transition-all bg-blue-600 text-white shadow-sm btn-icon";
+                btnDevice.className = "px-4 py-2 rounded-md text-sm font-medium transition-all text-slate-400 hover:text-white btn-icon";
+                title.innerText = "SuS-Daten importieren";
+                desc.innerText = "Lade die Datei mit Vornamen und Familiennamen hoch.";
+                userOptions.classList.remove('hidden');
+                deviceOptions.classList.add('hidden');
+                linkBtn.classList.remove('hidden');
+                stepPreviewNumber.innerText = "3";
+                
+                if (appState.user.raw.length > 0 || appState.user.textInput !== "") {
+                    mappingInfoBox.classList.toggle('hidden', !appState.user.mapping);
+                    mappingText.innerHTML = appState.user.mapping || "";
+                    previewSection.classList.remove('hidden');
+                    userNamesInput.value = appState.user.textInput;
+                    renderTable();
+                } else {
+                    previewSection.classList.add('hidden');
+                    mappingInfoBox.classList.add('hidden');
+                }
+            } else {
+                btnDevice.className = "px-4 py-2 rounded-md text-sm font-medium transition-all bg-blue-600 text-white shadow-sm btn-icon";
+                btnUser.className = "px-4 py-2 rounded-md text-sm font-medium transition-all text-slate-400 hover:text-white btn-icon";
+                title.innerText = "Auto-Einschreibungen laden";
+                desc.innerText = "Lade den Export aus Relution hoch, um User zuzuweisen.";
+                userOptions.classList.add('hidden');
+                deviceOptions.classList.remove('hidden');
+                linkBtn.classList.add('hidden');
+                stepPreviewNumber.innerText = "3";
+                
+                if (appState.device.raw.length > 0) {
+                    previewSection.classList.remove('hidden');
+                    userListInput.value = appState.device.textInput;
+                    processDeviceAssignment();
+                    renderTable();
+                } else {
+                    previewSection.classList.add('hidden');
+                }
+                mappingInfoBox.classList.add('hidden');
+            }
+            lucide.createIcons();
+        }
+
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('bg-slate-700/50', 'border-blue-500'); });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('bg-slate-700/50', 'border-blue-500'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('bg-slate-700/50', 'border-blue-500');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFile(file);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    if (currentMode === 'user') {
+                        appState.user.raw = json;
+                        populateUserTextInput(json);
+                        generateUsers();
+                        renderTable();
+                        previewSection.classList.remove('hidden');
+                    } else {
+                        pendingDeviceData = json;
+                        checkForConflicts(json);
+                    }
+                } catch (err) {
+                    showNotification("Fehler beim Lesen der Datei.");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function populateUserTextInput(data) {
+            if (data.length === 0) return;
+            const keys = Object.keys(data[0]);
+            const fNameKey = keys.find(k => k.toLowerCase() === 'vornamen' || k.toLowerCase().includes('vor')) || keys[1];
+            const lNameKey = keys.find(k => k.toLowerCase() === 'familienname' || k.toLowerCase().includes('sur') || k.toLowerCase().includes('nach')) || keys[2];
+            
+            const namesText = data.map(row => `${(row[fNameKey] || "").toString().trim()};${(row[lNameKey] || "").toString().trim()}`).join('\n');
+            appState.user.textInput = namesText;
+            userNamesInput.value = namesText;
+            appState.user.mapping = `Mapping: <b>${fNameKey}</b> & <b>${lNameKey}</b>`;
+        }
+
+        function checkForConflicts(data) {
+            const hasExistingUsers = data.some(row => row.userName || row.Benutzer);
+            const hasExistingNames = data.some(row => row.name || row.Gerätename);
+            if (hasExistingUsers || hasExistingNames) {
+                document.getElementById('import-dialog').classList.remove('hidden');
+            } else { confirmImportOptions(); }
+            lucide.createIcons();
+        }
+
+        function confirmImportOptions() {
+            const clearUsers = document.getElementById('check-clear-users').checked;
+            const keepNames = document.getElementById('check-keep-names').checked;
+            appState.device.raw = pendingDeviceData.map(row => {
+                let newRow = {...row};
+                if (clearUsers) { delete newRow.userName; delete newRow.Benutzer; }
+                if (!keepNames) { delete newRow.name; delete newRow.Gerätename; }
+                return newRow;
+            });
+            closeImportDialog();
+            processDeviceAssignment();
+            renderTable();
+            previewSection.classList.remove('hidden');
+            if (!appState.device.raw.some(row => row.name || row.Gerätename)) openRenamingModal();
+        }
+
+        function closeImportDialog() {
+            document.getElementById('import-dialog').classList.add('hidden');
+            pendingDeviceData = null;
+        }
+
+        function openRenamingModal() {
+            document.getElementById('device-count-info').innerText = `Erkannte Geräte: ${appState.device.raw.length}`;
+            document.getElementById('renaming-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeRenamingModal() { document.getElementById('renaming-modal').classList.add('hidden'); }
+
+        function applyRenaming() {
+            const prefix = document.getElementById('renaming-prefix').value;
+            const start = parseInt(document.getElementById('renaming-start').value) || 1;
+            const digits = parseInt(document.getElementById('renaming-digits').value) || 1;
+            appState.device.renamingConfig = { prefix, start, digits };
+            processDeviceAssignment();
+            renderTable();
+            closeRenamingModal();
+        }
+
+        function generateUsers() {
+            appState.user.textInput = userNamesInput.value;
+            const lines = appState.user.textInput.split('\n').filter(l => l.trim() !== "");
+            mappingInfoBox.classList.toggle('hidden', !appState.user.mapping);
+            mappingText.innerHTML = appState.user.mapping || "";
+
+            appState.user.processed = lines.map((line, i) => {
+                const parts = line.split(';');
+                const f = (parts[0] || "").trim();
+                const l = (parts[1] || "").trim();
+                let u = `${f}.${l}`.toLowerCase()
+                    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+                    .replace(/\s+/g, '').replace(/[^a-z0-9.]/g, '');
+                const originalRow = appState.user.raw[i] || {};
+                return { 
+                    'name': u, 'email': originalRow['email'] || `${u}@company.com`, 'givenName': f, 'surname': l,
+                    'lastLoggedTime': originalRow['lastLoggedTime'] || '', 'activated': 'Ja', 'disablePasswordAuthentication': 'Nein',
+                    'provider': '', 'mfaConfigured': 'Nein', 'createdDate': '', 'modifiedDate': ''
+                };
+            });
+            statusInfo.innerText = `${appState.user.processed.length} User generiert.`;
+        }
+
+        function processDeviceAssignment() {
+            if (appState.device.raw.length === 0) return;
+            appState.device.textInput = userListInput.value;
+            const list = appState.device.textInput.split('\n').map(u => u.trim()).filter(u => u !== "");
+            const config = appState.device.renamingConfig;
+            appState.device.processed = appState.device.raw.map((row, i) => {
+                const user = list[i] || row['userName'] || row['Benutzer'] || '';
+                let deviceName = row['name'] || row['Gerätename'] || 'iPad';
+                if (config) {
+                    deviceName = `${config.prefix}${(config.start + i).toString().padStart(config.digits, '0')}`;
+                }
+                return { 
+                    'name': deviceName, 'serialNumber': row['serialNumber'] || row['Seriennummer'] || '', 'userName': user, 
+                    'type': row['type'] || 'DEP', 'platform': row['platform'] || 'IOS', 'description': row['description'] || '',
+                    'ownership': row['ownership'] || 'COD', 'status': 'ASSIGNED', 'depAccountName': row['depAccountName'] || '',
+                    'depProfile': row['depProfile'] || '', 'useDefaultDeviceName': 'false', 'Modell': row['Modell'] || 'iPad' 
+                };
+            });
+            statusInfo.innerText = `${appState.device.processed.length} Geräte verarbeitet.`;
+        }
+
+        function transferUsernames() {
+            if (appState.user.processed.length === 0) { showNotification("Zuerst User generieren!"); return; }
+            const names = appState.user.processed.map(u => u.name).join('\n');
+            appState.device.textInput = names;
+            userListInput.value = names;
+            showNotification("Namen an Endgeräte übertragen.");
+            setMode('device');
+        }
+
+        // Resizing Logic
+        let isResizing = false, startX, startWidth, currentTh;
+        function initResize(e, th) {
+            isResizing = true; currentTh = th; startX = e.pageX; startWidth = th.offsetWidth;
+            th.querySelector('.resizer').classList.add('resizing');
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+        function handleMouseMove(e) {
+            if (!isResizing) return;
+            const newWidth = startWidth + (e.pageX - startX);
+            if (newWidth > 50) currentTh.style.width = newWidth + 'px';
+        }
+        function handleMouseUp() {
+            if (!isResizing) return; isResizing = false;
+            currentTh.querySelector('.resizer').classList.remove('resizing');
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        }
+
+        function renderTable() {
+            const dataToRender = currentMode === 'user' ? appState.user.processed : appState.device.processed;
+            if (!dataToRender || dataToRender.length === 0) { tableHeader.innerHTML = ""; tableBody.innerHTML = ""; return; }
+            const keys = Object.keys(dataToRender[0]);
+            tableHeader.innerHTML = keys.map(k => `
+                <th class="resizable-th px-4 py-2 uppercase tracking-wider text-[10px] font-bold text-slate-500 bg-slate-950 border-b border-blue-500/50">
+                    <span class="truncate block pr-2">${k}</span>
+                    <div class="resizer" onmousedown="initResize(event, this.parentElement)"></div>
+                </th>`).join('');
+            tableBody.innerHTML = dataToRender.slice(0, 50).map(row => `
+                <tr class="hover:bg-blue-900/10 transition-colors">
+                    ${keys.map(k => {
+                        let cellClass = "px-4 py-2 truncate text-slate-300";
+                        if (currentMode === 'user' && k === 'name') cellClass += " text-blue-400 font-semibold";
+                        if (currentMode === 'device' && (k === 'userName' || k === 'name')) {
+                             if(userListInput.value.trim() !== "" || appState.device.renamingConfig) cellClass += " text-green-400 font-semibold";
+                        }
+                        return `<td class="${cellClass}">${row[k] || '-'}</td>`;
+                    }).join('')}
+                </tr>`).join('');
+        }
+
+        async function saveState(type) {
+            const now = new Date();
+            const timestamp = now.toISOString().split('T')[0] + '_' + now.toLocaleTimeString('de-DE').replace(/:/g, '-');
+            const state = { appState, timestamp: now.toISOString() };
+            const jsonString = JSON.stringify(state, null, 2);
+
+            if (type === 'backup') {
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url;
+                a.download = `Relution_Backup_${timestamp}.json`; a.click();
+                showNotification("Backup gespeichert."); return;
+            }
+
+            if (window.showSaveFilePicker) {
+                try {
+                    if (!currentFileHandle) {
+                        currentFileHandle = await window.showSaveFilePicker({
+                            suggestedName: `Relution_Helper_Status.json`,
+                            types: [{ description: 'JSON File', accept: { 'application/json': ['.json'] } }]
+                        });
+                    }
+                    const writable = await currentFileHandle.createWritable();
+                    await writable.write(jsonString); await writable.close();
+                    saveMainBtn.innerHTML = `<i data-lucide="check" class="w-4 h-4 mr-2"></i>Status gespeichert`;
+                    lucide.createIcons(); showNotification("Status gesichert.");
+                } catch (err) { if (err.name !== 'AbortError') showNotification("Speichern fehlgeschlagen."); }
+            } else {
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url;
+                a.download = `Relution_Helper_Status.json`; a.click();
+                showNotification("Download gestartet.");
+            }
+        }
+
+        function loadState(input) {
+            const file = input.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const loaded = JSON.parse(e.target.result);
+                    if (loaded.appState) appState = loaded.appState;
+                    setMode(currentMode); // UI Refresh
+                    showNotification("Status geladen.");
+                } catch (err) { showNotification("Fehler: Ungültige Datei."); }
+            };
+            reader.readAsText(file); input.value = "";
+        }
+
+        function exportData() {
+            const dataToExport = currentMode === 'user' ? appState.user.processed : appState.device.processed;
+            if (dataToExport.length === 0) return;
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const csv = XLSX.utils.sheet_to_csv(ws, { forceQuotes: true, separator: ',' });
+            const blob = new Blob(["\ufeff", csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url;
+            a.download = `Relution_${currentMode}_Export.csv`; a.click();
+            showNotification("CSV exportiert!");
+        }
+
+        function clearAllData() {
+            appState = {
+                user: { raw: [], processed: [], mapping: "", textInput: "" },
+                device: { raw: [], processed: [], textInput: "", renamingConfig: null }
+            };
+            userNamesInput.value = ""; userListInput.value = ""; currentFileHandle = null;
+            previewSection.classList.add('hidden'); mappingInfoBox.classList.add('hidden');
+            fileInput.value = ""; statusInfo.innerText = "Alle Daten gelöscht.";
+            saveMainBtn.innerHTML = `<i data-lucide="save" class="w-4 h-4 mr-2"></i>Status Sichern`;
+            lucide.createIcons();
+        }
+
+        function showNotification(t) {
+            const toast = document.getElementById('notification');
+            document.getElementById('notification-text').innerText = t;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+        }
+
+        // --- INITIALISIERUNG ---
+        window.onload = () => {
+            setMode('user');
+        };
+    </script>
+</body>
+</html>
