@@ -18,7 +18,7 @@
             border: 2px dashed #334155;
             transition: all 0.3s ease;
         }
-        .custom-dropzone:hover {
+        .custom-dropzone.drag-over {
             border-color: #3b82f6;
             background-color: #1e293b;
         }
@@ -32,7 +32,6 @@
             backdrop-filter: blur(4px);
         }
         
-        /* Spalten-Resizing & Tabellen-Design */
         .resizable-th {
             position: relative;
             min-width: 80px;
@@ -72,21 +71,42 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Druck-Layout für Serienbrief */
+        /* Optimiertes Druck-Layout */
         @media print {
-            body * { visibility: hidden; }
-            #print-area, #print-area * { visibility: visible; }
-            #print-area { position: absolute; left: 0; top: 0; width: 100%; color: black; background: white; }
-            .page-break { 
-                page-break-after: always; 
-                padding: 1.5cm 2cm; 
-                min-height: 29.7cm;
-                border: none !important;
+            body > *:not(#print-area) {
+                display: none !important;
             }
-            .page-break:last-child { page-break-after: auto; }
+            #print-area {
+                display: block !important;
+                visibility: visible !important;
+                position: static !important;
+                width: 100% !important;
+                background: white !important;
+                color: black !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .page-break { 
+                display: block;
+                page-break-after: always;
+                break-after: page;
+                padding: 2cm;
+                margin: 0;
+                background: white !important;
+                color: black !important;
+                height: 100vh;
+                box-sizing: border-box;
+            }
+            .page-break:last-child { 
+                page-break-after: avoid;
+                break-after: avoid;
+            }
+            @page {
+                margin: 0;
+                size: A4;
+            }
         }
 
-        /* Brief-Preview im Darkmode */
         .letter-preview-card {
             background: white;
             color: #1e293b;
@@ -130,15 +150,17 @@
                                 <span class="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold mr-3">1</span>
                                 <h2 id="section-title" class="text-xl font-semibold">Schülerliste hochladen</h2>
                             </div>
-                            <button onclick="document.getElementById('jsonFileInput').click()" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-md flex items-center transition-colors btn-icon">
-                                <i data-lucide="folder-open" class="w-3.5 h-3.5 mr-2"></i>Status laden
-                            </button>
-                            <input type="file" id="jsonFileInput" class="hidden" accept=".json" onchange="loadState(this)">
+                            <div class="flex gap-2">
+                                <button onclick="document.getElementById('jsonFileInput').click()" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-md flex items-center transition-colors btn-icon">
+                                    <i data-lucide="folder-open" class="w-3.5 h-3.5 mr-2"></i>Status laden
+                                </button>
+                                <input type="file" id="jsonFileInput" class="hidden" accept=".json" onchange="loadState(this)">
+                            </div>
                         </div>
                         
                         <div id="dropzone" class="custom-dropzone rounded-xl p-12 text-center cursor-pointer mb-2">
                             <input type="file" id="fileInput" class="hidden" accept=".csv, .xlsx, .xls">
-                            <div class="flex flex-col items-center">
+                            <div class="flex flex-col items-center pointer-events-none">
                                 <i data-lucide="upload-cloud" class="w-14 h-14 text-blue-500 mb-4"></i>
                                 <span class="text-lg font-medium text-slate-200">Datei auswählen oder ziehen</span>
                                 <span class="text-xs text-slate-500 mt-2 text-center">Unterstützt .xlsx, .csv</span>
@@ -196,6 +218,9 @@
                         </button>
                         <button id="save-main-btn" onclick="saveState('save')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded-lg flex items-center shadow-md">
                             <i data-lucide="save" class="w-4 h-4 mr-2"></i>Status Sichern
+                        </button>
+                        <button onclick="saveState('backup')" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-4 py-2 rounded-lg flex items-center shadow-md">
+                            <i data-lucide="hard-drive" class="w-4 h-4 mr-2"></i>Backup erstellen
                         </button>
                         <button onclick="clearAllData()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs px-3 py-2 rounded-lg flex items-center transition-colors">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -305,8 +330,18 @@
         
         let currentMode = 'user';
         let pendingDeviceData = null;
+        let currentFileHandle = null;
 
         lucide.createIcons();
+
+        // Warnung beim Verlassen
+        window.addEventListener('beforeunload', function (e) {
+            if (appState.user.processed.length > 0 || appState.device.raw.length > 0) {
+                const msg = 'Ungespeicherte Änderungen gehen verloren.';
+                (e || window.event).returnValue = msg; 
+                return msg;
+            }
+        });
 
         function setMode(mode) {
             currentMode = mode;
@@ -339,7 +374,22 @@
         }
 
         const fileInput = document.getElementById('fileInput');
-        document.getElementById('dropzone').addEventListener('click', () => fileInput.click());
+        const dropzone = document.getElementById('dropzone');
+
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => { 
+            e.preventDefault(); 
+            dropzone.classList.add('drag-over'); 
+        });
+        dropzone.addEventListener('dragleave', () => { 
+            dropzone.classList.remove('drag-over'); 
+        });
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('drag-over');
+            if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+        });
+
         fileInput.addEventListener('change', (e) => { if(e.target.files[0]) handleFile(e.target.files[0]); });
 
         function handleFile(file) {
@@ -351,11 +401,35 @@
                 
                 if (currentMode === 'user') {
                     appState.user.raw = json;
+                    
+                    if (json.length === 0) return;
+                    
                     const keys = Object.keys(json[0] || {});
-                    const fK = keys.find(k => k.toLowerCase().includes('vor')) || keys[1];
-                    const lK = keys.find(k => k.toLowerCase().includes('nach')) || keys[2];
-                    const cK = keys.find(k => k.toLowerCase().includes('klass')) || '';
-                    appState.user.textInput = json.map(r => `${r[fK]||""};${r[lK]||""};${cK ? r[cK]||"" : ""}`).join('\n');
+                    
+                    const fK = keys.find(k => {
+                        const low = k.toLowerCase();
+                        return (low === 'vorname' || low === 'vornamen' || low === 'given name' || low === 'first name') && !low.includes('nach');
+                    }) || keys.find(k => k.toLowerCase().includes('vor')) || keys[1];
+                    
+                    const lK = keys.find(k => {
+                        const low = k.toLowerCase();
+                        return (low === 'nachname' || low === 'familienname' || low === 'surname' || low === 'last name' || low === 'name') && !low.includes('vor');
+                    }) || keys.find(k => k.toLowerCase().includes('nach') || k.toLowerCase().includes('familie')) || keys[2];
+                    
+                    const cK = keys.find(k => {
+                        const low = k.toLowerCase();
+                        return low === 'klasse' || low === 'class' || low.includes('klass');
+                    }) || '';
+
+                    appState.user.mapping = `Erkannt: <b>${fK}</b> (Vorname), <b>${lK}</b> (Nachname)${cK ? ', <b>'+cK+'</b> (Klasse)' : ''}`;
+                    
+                    appState.user.textInput = json.map(r => {
+                        const f = (r[fK] || "").toString().trim();
+                        const l = (r[lK] || "").toString().trim();
+                        const c = cK ? (r[cK] || "").toString().trim() : "";
+                        return `${f};${l};${c}`;
+                    }).join('\n');
+                    
                     document.getElementById('user-names-input').value = appState.user.textInput;
                     generateUsers();
                     setMode('user');
@@ -406,21 +480,43 @@
         function generateUsers() {
             const val = document.getElementById('user-names-input').value;
             appState.user.textInput = val;
+            
+            const mappingBox = document.getElementById('mapping-info-box');
+            mappingBox.classList.toggle('hidden', !appState.user.mapping);
+            document.getElementById('mapping-text').innerHTML = appState.user.mapping || "";
+
             appState.user.processed = val.split('\n').filter(l => l.trim() !== "").map(l => {
                 const p = l.split(';');
                 const f = (p[0]||"").trim(), s = (p[1]||"").trim(), c = (p[2]||"").trim();
-                const u = `${f}.${s}`.toLowerCase().replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss').replace(/[^a-z0-9.]/g,'');
+                
+                const clean = (str) => str.toLowerCase()
+                    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss')
+                    .replace(/[^a-z0-9.]/g,'');
+                
+                const u = `${clean(f)}.${clean(s)}`;
+                
                 return { 
-                    name: u, email: `${u}@company.com`, givenName: f, surname: s, password: generatePassword(), studentOfClasses: c, 
-                    disablePasswordAuthentication: 'false', managedAppleId: '', locale: 'de_DE', memberOfGroups: 'GMS_GOLDBERG Student;GMS_GOLDBERG Appstore' 
+                    name: u, 
+                    email: `${u}@company.com`, 
+                    givenName: f, 
+                    surname: s, 
+                    password: generatePassword(), 
+                    studentOfClasses: c, 
+                    disablePasswordAuthentication: 'false', 
+                    managedAppleId: '', 
+                    locale: 'de_DE', 
+                    memberOfGroups: 'GMS_GOLDBERG Student;GMS_GOLDBERG Appstore' 
                 };
             });
             document.getElementById('status-info').innerText = `${appState.user.processed.length} User bereit.`;
         }
 
         function processDeviceAssignment() {
-            const list = document.getElementById('user-list-input').value.split('\n').map(u => u.trim());
+            const listInput = document.getElementById('user-list-input').value;
+            appState.device.textInput = listInput;
+            const list = listInput.split('\n').map(u => u.trim());
             const config = appState.device.renamingConfig;
+            
             appState.device.processed = appState.device.raw.map((r, i) => {
                 const u = list[i] !== undefined && list[i] !== "" ? list[i] : (r['userEmail'] || r['userName'] || '');
                 let n = r['name'] || r['Gerätename'] || 'iPad';
@@ -435,7 +531,7 @@
             const emails = appState.user.processed.map(u => u.email).join('\n');
             document.getElementById('user-list-input').value = emails;
             appState.device.textInput = emails;
-            processDeviceAssignment(); // Sofort verarbeiten!
+            processDeviceAssignment();
             setMode('device');
             showNotification("E-Mail-Adressen an Geräte übertragen.");
         }
@@ -474,24 +570,72 @@
 
         function printLoginSlips() {
             const area = document.getElementById('print-area');
-            area.innerHTML = appState.user.processed.map(u => `
+            area.innerHTML = '';
+            area.classList.remove('hidden');
+
+            const content = appState.user.processed.map(u => `
                 <div class="page-break">
-                    <div style="text-align: right; font-size: 10pt;">
-                        <strong>GMS Goldberg</strong><br>Goldbergstraße 34, 71065 Sindelfingen<br>Tel.: 07031-4103190<br>poststelle@04121769.schule.bwl.de
+                    <!-- Kopfzeile verteilt über die volle Breite -->
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.5px solid black; padding-bottom: 10px; margin-bottom: 1cm; color: black;">
+                        <div style="font-size: 14pt; font-weight: 800; text-transform: uppercase;">
+                            GMS Goldberg
+                        </div>
+                        <div style="text-align: right; font-size: 8.5pt; line-height: 1.4;">
+                            Goldbergstraße 34, 71065 Sindelfingen<br>
+                            Tel.: 07031-4103190 | Fax: 07031-41031924<br>
+                            Mail: poststelle@04121769.schule.bwl.de
+                        </div>
                     </div>
-                    <div style="margin-top: 2cm; border-bottom: 2px solid #3b82f6; font-size: 18pt; font-weight: 800; color: #1e3a8a;">Deine Zugangsdaten für das iPad</div>
-                    <p style="margin-top: 1cm; font-size: 12pt;">Hallo <strong>${u.givenName} ${u.surname}</strong>,</p>
-                    <div style="margin: 1.5cm 0; padding: 1cm; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 13pt;">
-                            <tr><td style="padding: 10px; color: #64748b; font-size: 9pt; text-transform: uppercase;">Benutzername</td><td style="font-family: monospace; font-weight: bold;">${u.name}</td></tr>
-                            <tr style="border-top: 1px solid #e2e8f0;"><td style="padding: 10px; color: #64748b; font-size: 9pt; text-transform: uppercase;">E-Mail</td><td style="font-family: monospace;">${u.email}</td></tr>
-                            <tr style="border-top: 1px solid #e2e8f0;"><td style="padding: 10px; color: #64748b; font-size: 9pt; text-transform: uppercase;">Passwort</td><td style="font-family: monospace; font-weight: bold; color: #2563eb;">${u.password}</td></tr>
+
+                    <div style="margin-top: 1cm; font-size: 18pt; font-weight: 800; color: black; padding-bottom: 5px;">
+                        Deine Zugangsdaten für das iPad
+                    </div>
+                    
+                    <p style="margin-top: 1.5cm; font-size: 12pt; color: black;">
+                        Hallo <strong>${u.givenName} ${u.surname}</strong>,
+                    </p>
+                    <p style="font-size: 11pt; color: black; margin-bottom: 1cm;">
+                        hier sind deine persönlichen Zugangsdaten für dein iPad und dein Relution-Benutzerkonto. Bitte bewahre diesen Zettel sicher auf.
+                    </p>
+
+                    <div style="margin: 1.5cm 0; padding: 1.5cm 1cm; border: 2px solid black; border-radius: 4px; background: white;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13pt; color: black;">
+                            <tr>
+                                <td style="padding: 12px; font-size: 9pt; text-transform: uppercase; font-weight: bold; width: 180px;">Benutzername</td>
+                                <td style="font-family: monospace; font-weight: bold; font-size: 14pt;">${u.name}</td>
+                            </tr>
+                            <tr style="border-top: 1px solid black;">
+                                <td style="padding: 12px; font-size: 9pt; text-transform: uppercase; font-weight: bold;">E-Mail</td>
+                                <td style="font-family: monospace;">${u.email}</td>
+                            </tr>
+                            <tr style="border-top: 1px solid black;">
+                                <td style="padding: 12px; font-size: 9pt; text-transform: uppercase; font-weight: bold;">Passwort</td>
+                                <td style="font-family: monospace; font-weight: bold; font-size: 14pt;">${u.password}</td>
+                            </tr>
                         </table>
                     </div>
-                    <p style="margin-top: 2cm;">Mit freundlichen Grüßen,<br><br><strong>Dein IT-Team der GMS Goldberg</strong></p>
+
+                    <div style="margin-top: 1cm; font-size: 10pt; line-height: 1.6; color: black;">
+                        <strong>Wichtige Hinweise:</strong><br>
+                        • Gib dein Passwort niemals an Dritte weiter.<br>
+                        • Lehrkräfte fragen dich niemals nach deinem Passwort.<br>
+                        • Die Nutzung erfolgt gemäß der geltenden Schulordnung.
+                    </div>
+
+                    <div style="margin-top: auto; padding-top: 2cm; font-size: 11pt; color: black;">
+                        Mit freundlichen Grüßen,<br><br>
+                        <strong>Dein IT-Team der GMS Goldberg</strong>
+                    </div>
                 </div>
             `).join('');
-            window.print();
+            
+            area.innerHTML = content;
+
+            setTimeout(() => {
+                window.print();
+                area.classList.add('hidden');
+                area.innerHTML = '';
+            }, 100);
         }
 
         function exportData() {
@@ -517,12 +661,48 @@
             const a = document.createElement('a'); a.href = url; a.download = `Relution_${currentMode}_Export.csv`; a.click();
         }
 
-        function saveState() {
-            const state = JSON.stringify({ appState, timestamp: new Date().toISOString() });
-            const blob = new Blob([state], { type: 'application/json' });
+        async function saveState(type) {
+            const now = new Date();
+            const timestamp = now.toISOString().split('T')[0] + '_' + now.toLocaleTimeString('de-DE').replace(/:/g, '-');
+            const state = JSON.stringify({ appState, timestamp: now.toISOString() }, null, 2);
+
+            if (type === 'backup') {
+                const blob = new Blob([state], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url;
+                a.download = `Relution_Backup_${timestamp}.json`; a.click();
+                showNotification("Backup erstellt.");
+                return;
+            }
+
+            if (window.showSaveFilePicker) {
+                try {
+                    if (!currentFileHandle) {
+                        currentFileHandle = await window.showSaveFilePicker({
+                            suggestedName: `Relution_Helper_Status.json`,
+                            types: [{ description: 'JSON File', accept: { 'application/json': ['.json'] } }]
+                        });
+                    }
+                    const writable = await currentFileHandle.createWritable();
+                    await writable.write(state);
+                    await writable.close();
+                    showNotification("Status gesichert.");
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        downloadState(state);
+                    }
+                }
+            } else {
+                downloadState(state);
+            }
+        }
+
+        function downloadState(content) {
+            const blob = new Blob([content], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = `Relution_Helper_Status.json`; a.click();
-            showNotification("Status gesichert.");
+            const a = document.createElement('a'); a.href = url;
+            a.download = `Relution_Helper_Status.json`; a.click();
+            showNotification("Status heruntergeladen.");
         }
 
         function loadState(input) {
@@ -537,6 +717,42 @@
                 showNotification("Status geladen.");
             };
             r.readAsText(f);
+            input.value = "";
+        }
+
+        function exportLetterLatex() {
+            if (appState.user.processed.length === 0) return showNotification("Keine Daten.");
+            
+            let tex = `\\documentclass[11pt, a4paper]{article}
+\\usepackage[a4paper, top=2cm, bottom=2cm, left=2.5cm, right=2.5cm]{geometry}
+\\usepackage{fontspec}
+\\usepackage[german]{babel}
+\\usepackage{tcolorbox}
+\\usepackage{tabularx}
+\\babelfont{rm}{Noto Sans}
+
+\\newcommand{\\zugangsdaten}[5]{
+    \\begin{flushright}\\small\\textbf{GMS Goldberg}\\\\Goldbergstraße 34, 71065 Sindelfingen\\\\Tel.: 07031-4103190\\\\poststelle@04121769.schule.bwl.de\\end{flushright}
+    \\vspace{1cm}\\noindent\\textbf{iPad Zugangsdaten}\\\\Sindelfingen, den \\today \\bigskip
+    \\\\Hallo #1 #2, \\medskip\\\\hier sind deine persönlichen Zugangsdaten:\\\\
+    \\begin{tcolorbox}[colback=white,colframe=black,title=Login-Details (Klasse #5)]
+    \\renewcommand{\\arraystretch}{1.5}
+    \\begin{tabularx}{\\textwidth}{l X} \\textbf{Benutzername:} & \\texttt{#3} \\\\ \\textbf{E-Mail:} & \\texttt{#3@company.com} \\\\ \\textbf{Passwort:} & \\texttt{#4} \\end{tabularx}
+    \\end{tcolorbox}
+    \\newpage
+}
+\\begin{document}\\pagestyle{empty}\n`;
+
+            appState.user.processed.forEach(u => {
+                tex += `\\zugangsdaten{${u.givenName}}{${u.surname}}{${u.name}}{${u.password}}{${u.studentOfClasses || '-'}}\n`;
+            });
+
+            tex += `\\end{document}`;
+
+            const blob = new Blob([tex], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `Relution_Serienbrief.tex`; a.click();
+            showNotification("LaTeX Datei erzeugt!");
         }
 
         function clearAllData() {
