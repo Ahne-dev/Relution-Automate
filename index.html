@@ -121,7 +121,6 @@
 
         <!-- Main Content -->
         <main class="space-y-6">
-            <!-- Step 1 & 2 Container (Hidden in Letter Mode if wanted, or shared) -->
             <div id="setup-container" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Step 1: Input -->
                 <div class="lg:col-span-2 space-y-6">
@@ -152,9 +151,8 @@
                     </section>
                 </div>
 
-                <!-- Step 2: Customization (Shared Textareas) -->
+                <!-- Step 2: Options Container -->
                 <div id="options-container" class="space-y-6">
-                    <!-- User Edit -->
                     <section id="user-options" class="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl h-full flex flex-col">
                         <div class="flex items-center mb-4">
                             <span class="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold mr-3">2</span>
@@ -166,11 +164,15 @@
                                   oninput="generateUsers(); renderTable();"></textarea>
                     </section>
 
-                    <!-- Device Edit -->
                     <section id="device-options" class="hidden bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl h-full flex flex-col">
-                        <div class="flex items-center mb-4">
-                            <span class="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold mr-3">2</span>
-                            <h2 class="text-xl font-semibold">User-Zuweisung</h2>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center">
+                                <span class="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold mr-3">2</span>
+                                <h2 class="text-xl font-semibold">User-Zuweisung</h2>
+                            </div>
+                            <button onclick="openRenamingModal()" class="text-[10px] bg-slate-700 hover:bg-blue-600 px-2 py-1 rounded transition-colors flex items-center">
+                                <i data-lucide="hash" class="w-3 h-3 mr-1"></i>iPad-Namen
+                            </button>
                         </div>
                         <textarea id="user-list-input" 
                                   class="w-full flex-grow bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none placeholder:text-slate-600 min-h-[250px]"
@@ -180,7 +182,7 @@
                 </div>
             </div>
 
-            <!-- Preview & Export Section -->
+            <!-- Preview Section -->
             <section id="preview-section" class="hidden bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                     <div class="flex items-center">
@@ -190,7 +192,7 @@
                     
                     <div class="flex flex-wrap gap-2">
                         <button id="link-to-devices-btn" onclick="transferUsernames()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-4 py-2 rounded-lg flex items-center shadow-md">
-                            <i data-lucide="link" class="w-4 h-4 mr-2"></i>An Geräte übertragen
+                            <i data-lucide="link" class="w-4 h-4 mr-2"></i>E-Mails an Geräte übertragen
                         </button>
                         <button id="save-main-btn" onclick="saveState('save')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded-lg flex items-center shadow-md">
                             <i data-lucide="save" class="w-4 h-4 mr-2"></i>Status Sichern
@@ -218,7 +220,7 @@
                 </div>
             </section>
 
-            <!-- Letter Mode Section -->
+            <!-- Letter Section -->
             <section id="letter-section" class="hidden space-y-6">
                 <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl">
                     <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
@@ -234,14 +236,10 @@
                             </button>
                         </div>
                     </div>
-
-                    <div id="letter-preview-container" class="grid grid-cols-1 md:grid-cols-2 gap-8 max-h-[600px] overflow-y-auto p-4 bg-slate-950/50 rounded-xl border border-slate-700 no-scrollbar">
-                        <!-- Briefe werden hier gerendert -->
-                    </div>
-                    
+                    <div id="letter-preview-container" class="grid grid-cols-1 md:grid-cols-2 gap-8 max-h-[600px] overflow-y-auto p-4 bg-slate-950/50 rounded-xl border border-slate-700 no-scrollbar"></div>
                     <div id="letter-status-empty" class="text-center py-20 text-slate-500">
                         <i data-lucide="user-plus" class="w-12 h-12 mx-auto mb-4 opacity-20"></i>
-                        <p>Keine Schülerdaten geladen. Bitte im User-Import Namen hinzufügen.</p>
+                        <p>Keine Schülerdaten vorhanden.</p>
                     </div>
                 </div>
             </section>
@@ -251,7 +249,35 @@
     <!-- Hidden Print Area -->
     <div id="print-area" class="hidden"></div>
 
-    <!-- Modals -->
+    <!-- Conflict Modal -->
+    <div id="import-dialog" class="fixed inset-0 z-[60] hidden modal-overlay flex items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <h3 class="text-xl font-bold mb-4 flex items-center text-blue-400">
+                <i data-lucide="alert-circle" class="mr-2"></i> Daten gefunden
+            </h3>
+            <p class="text-sm text-slate-300 mb-6">Die Datei enthält bereits Zuweisungen. Wie möchtest du fortfahren?</p>
+            <div class="space-y-3">
+                <div class="p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="check-clear-users" class="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded">
+                        <span class="ml-3 text-sm">Vorhandene E-Mails/Nutzer löschen</span>
+                    </label>
+                </div>
+                <div class="p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="check-keep-names" checked class="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded">
+                        <span class="ml-3 text-sm">Vorhandene iPad-Namen behalten</span>
+                    </label>
+                </div>
+            </div>
+            <div class="mt-8 flex gap-3">
+                <button onclick="confirmImportOptions()" class="flex-grow bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold">Bestätigen</button>
+                <button onclick="closeImportDialog()" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-4 py-2 rounded-lg">Abbrechen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Renaming Modal -->
     <div id="renaming-modal" class="fixed inset-0 z-[60] hidden modal-overlay flex items-center justify-center p-4">
         <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <h3 class="text-xl font-bold mb-4 flex items-center text-indigo-400"><i data-lucide="hash" class="mr-2"></i> iPad-Namen verwalten</h3>
@@ -266,7 +292,7 @@
         </div>
     </div>
 
-    <!-- Notification Toast -->
+    <!-- Notification -->
     <div id="notification" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 bg-blue-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center z-50">
         <i data-lucide="info" class="w-6 h-6 mr-3"></i><span id="notification-text">Hinweis</span>
     </div>
@@ -278,55 +304,40 @@
         };
         
         let currentMode = 'user';
-        let currentFileHandle = null;
+        let pendingDeviceData = null;
 
         lucide.createIcons();
 
         function setMode(mode) {
             currentMode = mode;
-            const btnUser = document.getElementById('btn-mode-user');
-            const btnDevice = document.getElementById('btn-mode-device');
-            const btnLetter = document.getElementById('btn-mode-letter');
+            ['btn-mode-user', 'btn-mode-device', 'btn-mode-letter'].forEach(id => {
+                const btn = document.getElementById(id);
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('text-slate-400');
+            });
             
-            // UI Toggle
-            [btnUser, btnDevice, btnLetter].forEach(b => b.classList.remove('bg-blue-600', 'text-white'));
-            [btnUser, btnDevice, btnLetter].forEach(b => b.classList.add('text-slate-400'));
+            const activeBtn = document.getElementById('btn-mode-' + mode);
+            activeBtn.classList.add('bg-blue-600', 'text-white');
+            activeBtn.classList.remove('text-slate-400');
+
+            document.getElementById('setup-container').classList.toggle('hidden', mode === 'letter');
+            document.getElementById('preview-section').classList.toggle('hidden', mode === 'letter' || (mode === 'user' && appState.user.processed.length === 0) || (mode === 'device' && appState.device.raw.length === 0));
+            document.getElementById('letter-section').classList.toggle('hidden', mode !== 'letter');
+            document.getElementById('user-options').classList.toggle('hidden', mode !== 'user');
+            document.getElementById('device-options').classList.toggle('hidden', mode !== 'device');
+            document.getElementById('link-to-devices-btn').classList.toggle('hidden', mode !== 'user');
             
-            document.getElementById('btn-mode-' + mode).classList.add('bg-blue-600', 'text-white');
-            document.getElementById('btn-mode-' + mode).classList.remove('text-slate-400');
-
-            const setupCont = document.getElementById('setup-container');
-            const previewSect = document.getElementById('preview-section');
-            const letterSect = document.getElementById('letter-section');
-            const userOpts = document.getElementById('user-options');
-            const deviceOpts = document.getElementById('device-options');
-
             if (mode === 'user') {
-                setupCont.classList.remove('hidden');
-                previewSect.classList.toggle('hidden', appState.user.processed.length === 0);
-                letterSect.classList.add('hidden');
-                userOpts.classList.remove('hidden');
-                deviceOpts.classList.add('hidden');
                 document.getElementById('section-title').innerText = "SuS-Daten importieren";
-                renderTable();
             } else if (mode === 'device') {
-                setupCont.classList.remove('hidden');
-                previewSect.classList.toggle('hidden', appState.device.raw.length === 0);
-                letterSect.classList.add('hidden');
-                userOpts.classList.add('hidden');
-                deviceOpts.classList.remove('hidden');
                 document.getElementById('section-title').innerText = "Endgeräte verwalten";
-                renderTable();
             } else if (mode === 'letter') {
-                setupCont.classList.add('hidden');
-                previewSect.classList.add('hidden');
-                letterSect.classList.remove('hidden');
                 renderLetterPreview();
             }
+            renderTable();
             lucide.createIcons();
         }
 
-        // File Handling
         const fileInput = document.getElementById('fileInput');
         document.getElementById('dropzone').addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => { if(e.target.files[0]) handleFile(e.target.files[0]); });
@@ -340,20 +351,50 @@
                 
                 if (currentMode === 'user') {
                     appState.user.raw = json;
-                    const keys = Object.keys(json[0]);
+                    const keys = Object.keys(json[0] || {});
                     const fK = keys.find(k => k.toLowerCase().includes('vor')) || keys[1];
                     const lK = keys.find(k => k.toLowerCase().includes('nach')) || keys[2];
                     const cK = keys.find(k => k.toLowerCase().includes('klass')) || '';
-                    appState.user.textInput = json.map(r => `${r[fK]};${r[lK]};${cK ? r[cK] : ""}`).join('\n');
+                    appState.user.textInput = json.map(r => `${r[fK]||""};${r[lK]||""};${cK ? r[cK]||"" : ""}`).join('\n');
                     document.getElementById('user-names-input').value = appState.user.textInput;
                     generateUsers();
+                    setMode('user');
                 } else {
-                    appState.device.raw = json;
-                    processDeviceAssignment();
+                    pendingDeviceData = json;
+                    checkForConflicts(json);
                 }
-                setMode(currentMode);
             };
             reader.readAsArrayBuffer(file);
+        }
+
+        function checkForConflicts(data) {
+            const hasExisting = data.some(r => r.userEmail || r.userName || r.name || r.Gerätename);
+            if (hasExisting) {
+                document.getElementById('import-dialog').classList.remove('hidden');
+            } else {
+                confirmImportOptions();
+            }
+        }
+
+        function confirmImportOptions() {
+            const clearUsers = document.getElementById('check-clear-users').checked;
+            const keepNames = document.getElementById('check-keep-names').checked;
+            
+            appState.device.raw = pendingDeviceData.map(r => {
+                let row = {...r};
+                if (clearUsers) { delete row.userEmail; delete row.userName; }
+                if (!keepNames) { delete row.name; delete row.Gerätename; }
+                return row;
+            });
+            
+            closeImportDialog();
+            processDeviceAssignment();
+            setMode('device');
+        }
+
+        function closeImportDialog() {
+            document.getElementById('import-dialog').classList.add('hidden');
+            pendingDeviceData = null;
         }
 
         function generatePassword() {
@@ -369,8 +410,10 @@
                 const p = l.split(';');
                 const f = (p[0]||"").trim(), s = (p[1]||"").trim(), c = (p[2]||"").trim();
                 const u = `${f}.${s}`.toLowerCase().replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss').replace(/[^a-z0-9.]/g,'');
-                return { name: u, email: `${u}@company.com`, givenName: f, surname: s, password: generatePassword(), studentOfClasses: c, 
-                         disablePasswordAuthentication: 'false', managedAppleId: '', locale: 'de_DE', memberOfGroups: 'GMS_GOLDBERG Student;GMS_GOLDBERG Appstore' };
+                return { 
+                    name: u, email: `${u}@company.com`, givenName: f, surname: s, password: generatePassword(), studentOfClasses: c, 
+                    disablePasswordAuthentication: 'false', managedAppleId: '', locale: 'de_DE', memberOfGroups: 'GMS_GOLDBERG Student;GMS_GOLDBERG Appstore' 
+                };
             });
             document.getElementById('status-info').innerText = `${appState.user.processed.length} User bereit.`;
         }
@@ -379,26 +422,28 @@
             const list = document.getElementById('user-list-input').value.split('\n').map(u => u.trim());
             const config = appState.device.renamingConfig;
             appState.device.processed = appState.device.raw.map((r, i) => {
-                const u = list[i] || r['userEmail'] || r['userName'] || '';
-                let n = r['name'] || 'iPad';
+                const u = list[i] !== undefined && list[i] !== "" ? list[i] : (r['userEmail'] || r['userName'] || '');
+                let n = r['name'] || r['Gerätename'] || 'iPad';
                 if(config) n = `${config.prefix}${(config.start+i).toString().padStart(config.digits,'0')}`;
-                return { serialNumber: r['serialNumber']||'', name: n, userEmail: u };
+                return { serialNumber: r['serialNumber'] || r['Seriennummer'] || '', name: n, userEmail: u };
             });
             document.getElementById('status-info').innerText = `${appState.device.processed.length} Geräte bereit.`;
         }
 
         function transferUsernames() {
+            if (appState.user.processed.length === 0) return showNotification("Keine User vorhanden.");
             const emails = appState.user.processed.map(u => u.email).join('\n');
-            appState.device.textInput = emails;
             document.getElementById('user-list-input').value = emails;
+            appState.device.textInput = emails;
+            processDeviceAssignment(); // Sofort verarbeiten!
             setMode('device');
-            showNotification("E-Mails übertragen.");
+            showNotification("E-Mail-Adressen an Geräte übertragen.");
         }
 
         function renderTable() {
             const data = currentMode === 'user' ? appState.user.processed : appState.device.processed;
             const head = document.getElementById('table-header'), body = document.getElementById('table-body');
-            if(!data || data.length === 0) return;
+            if(!data || data.length === 0) { head.innerHTML = ""; body.innerHTML = ""; return; }
             const keys = Object.keys(data[0]);
             head.innerHTML = keys.map(k => `<th class="resizable-th px-4 py-2 uppercase font-bold text-slate-500 bg-slate-950 border-b border-blue-500/50"><span class="truncate block pr-2">${k}</span><div class="resizer" onmousedown="initResize(event, this.parentElement)"></div></th>`).join('');
             body.innerHTML = data.slice(0, 50).map(r => `<tr class="hover:bg-blue-900/10 transition-colors">${keys.map(k => `<td class="px-4 py-2 truncate text-slate-300">${r[k]||'-'}</td>`).join('')}</tr>`).join('');
@@ -407,11 +452,7 @@
         function renderLetterPreview() {
             const container = document.getElementById('letter-preview-container');
             const empty = document.getElementById('letter-status-empty');
-            
-            if (appState.user.processed.length === 0) {
-                container.innerHTML = ""; empty.classList.remove('hidden'); return;
-            }
-            
+            if (appState.user.processed.length === 0) { container.innerHTML = ""; empty.classList.remove('hidden'); return; }
             empty.classList.add('hidden');
             container.innerHTML = appState.user.processed.map(u => `
                 <div class="letter-preview-card p-8 rounded-lg border border-slate-200 relative">
@@ -420,21 +461,13 @@
                     </div>
                     <div class="mt-4 font-bold border-b border-slate-300 pb-1 text-blue-600">iPad Zugangsdaten</div>
                     <p class="mt-4 text-xs">Hallo <strong>${u.givenName} ${u.surname}</strong>,</p>
-                    <p class="text-[10px] text-slate-600">dein schulisches iPad ist bereit. Hier sind deine Logindaten:</p>
-                    
                     <div class="my-4 p-4 bg-slate-50 border-l-4 border-blue-500 rounded text-[11px]">
                         <div class="grid grid-cols-2 gap-y-1">
-                            <span class="font-bold text-slate-400 uppercase text-[8px]">Benutzername</span>
-                            <span class="font-mono">${u.name}</span>
-                            <span class="font-bold text-slate-400 uppercase text-[8px]">Passwort</span>
-                            <span class="font-mono text-blue-700 font-bold">${u.password}</span>
-                            <span class="font-bold text-slate-400 uppercase text-[8px]">E-Mail</span>
-                            <span class="font-mono">${u.email}</span>
-                            <span class="font-bold text-slate-400 uppercase text-[8px]">Klasse</span>
-                            <span>${u.studentOfClasses || '-'}</span>
+                            <span class="font-bold text-slate-400 text-[8px]">NUTZER</span><span>${u.name}</span>
+                            <span class="font-bold text-slate-400 text-[8px]">PASSWORT</span><span class="text-blue-700 font-bold">${u.password}</span>
+                            <span class="font-bold text-slate-400 text-[8px]">E-MAIL</span><span>${u.email}</span>
                         </div>
                     </div>
-                    <div class="text-[8px] text-slate-400 italic">Passwort bitte geheim halten.</div>
                 </div>
             `).join('');
         }
@@ -443,90 +476,48 @@
             const area = document.getElementById('print-area');
             area.innerHTML = appState.user.processed.map(u => `
                 <div class="page-break">
-                    <div style="text-align: right; font-size: 10pt; line-height: 1.3;">
-                        <strong>GMS Goldberg</strong><br>Goldbergstraße 34, 71065 Sindelfingen<br>Tel.: 07031-4103190 | Fax: 07031-41031924<br>poststelle@04121769.schule.bwl.de
+                    <div style="text-align: right; font-size: 10pt;">
+                        <strong>GMS Goldberg</strong><br>Goldbergstraße 34, 71065 Sindelfingen<br>Tel.: 07031-4103190<br>poststelle@04121769.schule.bwl.de
                     </div>
-                    <div style="margin-top: 2cm; border-bottom: 2px solid #3b82f6; padding-bottom: 5px; font-size: 18pt; font-weight: 800; color: #1e3a8a;">
-                        Deine Zugangsdaten für das iPad
-                    </div>
-                    <div style="margin-top: 1cm; font-size: 12pt;">
-                        Hallo <strong>${u.givenName} ${u.surname}</strong>,
-                        <p style="margin-top: 0.5cm;">hier sind deine persönlichen Zugangsdaten für dein iPad und dein Relution-Benutzerkonto. Bitte bewahre diesen Zettel sicher auf.</p>
-                    </div>
+                    <div style="margin-top: 2cm; border-bottom: 2px solid #3b82f6; font-size: 18pt; font-weight: 800; color: #1e3a8a;">Deine Zugangsdaten für das iPad</div>
+                    <p style="margin-top: 1cm; font-size: 12pt;">Hallo <strong>${u.givenName} ${u.surname}</strong>,</p>
                     <div style="margin: 1.5cm 0; padding: 1cm; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc;">
                         <table style="width: 100%; border-collapse: collapse; font-size: 13pt;">
-                            <tr><td style="padding: 10px; color: #64748b; font-size: 9pt; text-transform: uppercase; font-weight: bold;">Benutzername</td><td style="font-family: monospace; font-weight: bold;">${u.name}</td></tr>
-                            <tr style="border-top: 1px solid #e2e8f0;"><td style="padding: 10px; color: #64748b; font-size: 9pt; text-transform: uppercase; font-weight: bold;">E-Mail</td><td style="font-family: monospace;">${u.email}</td></tr>
-                            <tr style="border-top: 1px solid #e2e8f0;"><td style="padding: 10px; color: #64748b; font-size: 9pt; text-transform: uppercase; font-weight: bold;">Passwort</td><td style="font-family: monospace; font-weight: bold; color: #2563eb;">${u.password}</td></tr>
-                            <tr style="border-top: 1px solid #e2e8f0;"><td style="padding: 10px; color: #64748b; font-size: 9pt; text-transform: uppercase; font-weight: bold;">Klasse</td><td>${u.studentOfClasses || '-'}</td></tr>
+                            <tr><td style="padding: 10px; color: #64748b; font-size: 9pt; text-transform: uppercase;">Benutzername</td><td style="font-family: monospace; font-weight: bold;">${u.name}</td></tr>
+                            <tr style="border-top: 1px solid #e2e8f0;"><td style="padding: 10px; color: #64748b; font-size: 9pt; text-transform: uppercase;">E-Mail</td><td style="font-family: monospace;">${u.email}</td></tr>
+                            <tr style="border-top: 1px solid #e2e8f0;"><td style="padding: 10px; color: #64748b; font-size: 9pt; text-transform: uppercase;">Passwort</td><td style="font-family: monospace; font-weight: bold; color: #2563eb;">${u.password}</td></tr>
                         </table>
                     </div>
-                    <div style="margin-top: 1cm; font-size: 10pt; color: #475569;">
-                        <strong>Hinweise:</strong>
-                        <ul style="margin-top: 5px;">
-                            <li>Passwort niemals an Dritte weitergeben.</li>
-                            <li>Lehrkräfte fragen niemals nach deinem Passwort.</li>
-                            <li>Nutzung gemäß Schulordnung.</li>
-                        </ul>
-                    </div>
-                    <div style="margin-top: 3cm; font-size: 11pt;">
-                        Mit freundlichen Grüßen,<br><br><strong>Dein IT-Team der GMS Goldberg</strong>
-                    </div>
+                    <p style="margin-top: 2cm;">Mit freundlichen Grüßen,<br><br><strong>Dein IT-Team der GMS Goldberg</strong></p>
                 </div>
             `).join('');
             window.print();
         }
 
-        function exportLetterLatex() {
-            if (appState.user.processed.length === 0) return showNotification("Keine Daten.");
-            
-            let tex = `\\documentclass[11pt, a4paper]{article}
-\\usepackage[a4paper, top=2cm, bottom=2cm, left=2.5cm, right=2.5cm]{geometry}
-\\usepackage{fontspec}
-\\usepackage[german]{babel}
-\\usepackage{tcolorbox}
-\\usepackage{tabularx}
-\\babelfont{rm}{Noto Sans}
-
-\\newcommand{\\zugangsdaten}[5]{
-    \\begin{flushright}\\small\\textbf{GMS Goldberg}\\\\Goldbergstraße 34, 71065 Sindelfingen\\\\Tel.: 07031-4103190\\\\poststelle@04121769.schule.bwl.de\\end{flushright}
-    \\vspace{1cm}\\noindent\\textbf{iPad Zugangsdaten}\\\\Sindelfingen, den \\today \\bigskip
-    \\\\Hallo #1 #2, \\medskip\\\\hier sind deine persönlichen Zugangsdaten:\\\\
-    \\begin{tcolorbox}[colback=blue!5!white,colframe=blue!75!black,title=Login-Details (Klasse #5)]
-    \\renewcommand{\\arraystretch}{1.5}
-    \\begin{tabularx}{\\textwidth}{l X} \\textbf{Benutzername:} & \\texttt{#3} \\\\ \\textbf{E-Mail:} & \\texttt{#3@company.com} \\\\ \\textbf{Passwort:} & \\texttt{#4} \\end{tabularx}
-    \\end{tcolorbox}
-    \\newpage
-}
-\\begin{document}\\pagestyle{empty}\n`;
-
-            appState.user.processed.forEach(u => {
-                tex += `\\zugangsdaten{${u.givenName}}{${u.surname}}{${u.name}}{${u.password}}{${u.studentOfClasses || '-'}}\n`;
-            });
-
-            tex += `\\end{document}`;
-
-            const blob = new Blob([tex], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = `Relution_Serienbrief.tex`; a.click();
-            showNotification("LaTeX Datei erzeugt!");
-        }
-
         function exportData() {
             let data = currentMode === 'user' ? appState.user.processed : appState.device.processed;
+            if (data.length === 0) return;
+            let finalData = data;
             if (currentMode === 'user') {
-                data = data.map(u => ({ name: u.name, email: u.email, givenName: u.givenName, surname: u.surname, password: u.password, disablePasswordAuthentication: u.disablePasswordAuthentication, phone: '', position: '', country: '', managedAppleId: '', locale: u.locale, memberOfGroups: u.memberOfGroups, teacherOfClasses: '', studentOfClasses: u.studentOfClasses }));
+                finalData = data.map(u => ({ 
+                    name: u.name, email: u.email, givenName: u.givenName, surname: u.surname, password: u.password, 
+                    disablePasswordAuthentication: u.disablePasswordAuthentication, phone: '', position: '', country: '', 
+                    managedAppleId: '', locale: u.locale, memberOfGroups: u.memberOfGroups, teacherOfClasses: '', studentOfClasses: u.studentOfClasses 
+                }));
             } else {
-                data = data.map(d => ({ serialNumber: d.serialNumber, name: d.name, userEmail: d.userEmail, depProfile: '', enrollToOrganizationUuid: '', Benutzertyp: '', 'zuordnung Koffer': '' }));
+                finalData = data.map(d => ({ 
+                    serialNumber: d.serialNumber, name: d.name, userEmail: d.userEmail, 
+                    depProfile: '', enrollToOrganizationUuid: '', Benutzertyp: '', 'zuordnung Koffer': '' 
+                }));
             }
-            const ws = XLSX.utils.json_to_sheet(data);
+            const ws = XLSX.utils.json_to_sheet(finalData);
             const csv = XLSX.utils.sheet_to_csv(ws, { forceQuotes: true, FS: ',' });
             const blob = new Blob(["\ufeff", csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a'); a.href = url; a.download = `Relution_${currentMode}_Export.csv`; a.click();
         }
 
-        function saveState(type) {
+        function saveState() {
             const state = JSON.stringify({ appState, timestamp: new Date().toISOString() });
             const blob = new Blob([state], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -540,6 +531,8 @@
             r.onload = (e) => {
                 const loaded = JSON.parse(e.target.result);
                 if(loaded.appState) appState = loaded.appState;
+                document.getElementById('user-names-input').value = appState.user.textInput || "";
+                document.getElementById('user-list-input').value = appState.device.textInput || "";
                 setMode(currentMode);
                 showNotification("Status geladen.");
             };
@@ -549,7 +542,7 @@
         function clearAllData() {
             appState = { user: { raw: [], processed: [], mapping: "", textInput: "" }, device: { raw: [], processed: [], textInput: "", renamingConfig: null } };
             document.getElementById('user-names-input').value = ""; document.getElementById('user-list-input').value = "";
-            setMode('user'); showNotification("Alles gelöscht.");
+            setMode('user'); showNotification("Daten gelöscht.");
         }
 
         function showNotification(t) {
@@ -566,11 +559,12 @@
             processDeviceAssignment(); renderTable(); closeRenamingModal();
         }
 
-        // Table Resize
         let isResizing = false, sX, sW, cTh;
         function initResize(e, th) { isResizing = true; cTh = th; sX = e.pageX; sW = th.offsetWidth; document.addEventListener('mousemove', hMM); document.addEventListener('mouseup', hMU); }
         function hMM(e) { if(!isResizing) return; const w = sW + (e.pageX - sX); if(w > 50) cTh.style.width = w + 'px'; }
         function hMU() { isResizing = false; document.removeEventListener('mousemove', hMM); document.removeEventListener('mouseup', hMU); }
+
+        window.onload = () => setMode('user');
     </script>
 </body>
 </html>
